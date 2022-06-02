@@ -1,0 +1,367 @@
+---
+title: "Analysis of NBA Wages and Performance"
+author: "Wisdom Uwaifo"
+date: '2022-04-05'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+```{r}
+library(readxl)
+nbasal1 <- read_excel("~/Desktop/nbasal1.xls")
+```
+
+```{r}
+options(scipen=999) 
+plot(nbasal1$wage~nbasal1$points)
+```
+
+```{r}
+options(scipen=999) 
+plot(nbasal1$wage~nbasal1$age)
+```
+
+```{r}
+options(scipen=999) 
+plot(nbasal1$wage~nbasal1$exper)
+```
+
+
+```{r}
+options(scipen=999) 
+plot(nbasal1$wage~nbasal1$games)
+```
+
+
+```{r}
+##Create Variables
+age <- (nbasal1$age)
+allstar <- (nbasal1$allstar)
+assists <- (nbasal1$assists)
+center <- (nbasal1$center)
+children <- (nbasal1$children)
+collexper <- (nbasal1$coll)
+draft <- (nbasal1$draft)
+exper <- (nbasal1$exper)
+forward <- (nbasal1$forward)
+games <- (nbasal1$games)
+guard <- (nbasal1$guard)
+married <- (nbasal1$marr)
+points <- (nbasal1$points)
+rebounds <- (nbasal1$rebounds)
+wage <- (nbasal1$wage)
+```
+
+```{r}
+## We are doing research on the salary of each NBA player based on numerous factors
+summary(wage)
+```
+
+
+```{r}
+nbasal1$wagevar <- ifelse(nbasal1$wage > 1424, 1, 0)
+```
+
+
+
+```{r}
+##Linear Regression Model Using 5 Variables
+LinearModel1 <- lm(wage ~ points + exper + collexper + age + games, data = nbasal1)
+summary(LinearModel1)
+```
+
+
+```{r}
+##Results for Linear Model 1
+## Wage  = 6.523(age) + 83.185(exper) - 77.024(collexper) + 105.346(points) - 2.765 (games)
+
+## Wage increases with Age, Experience, and the amount of points scored
+## Wage decreases with more college experience & the amount of games played.
+## Is this a good model?
+
+## Only two Variables are significant: Experience & Points... We need to do more research!
+```
+
+```{r}
+## Which performance measure is going to help NBA players attain the highest salary holding all other factors constant?
+
+LinearModelPerformance <- lm(wage ~ points + assists + rebounds, data = nbasal1)
+
+summary(LinearModelPerformance)
+
+##Points & Rebounds are significant while assits are not. Does it matter what position you play?
+```
+
+```{r}
+## Linear Regression with Positions. Since forwards & centers gain more rebounds, does being a guard negatively affect how much money you will make in the NBA?
+
+LinearModelGuard <- lm(wage ~ points + assists + rebounds + guard)
+summary(LinearModelGuard)
+
+##It does mean you will make less in the NBA!! & it is a significant factor. 
+```
+
+```{r}
+##Centers & Forwards get the most rebounds in the NBA Statistically speaking. Does this mean they are geared to make the most money??
+
+LinearModelNotGuard <- lm(wage ~ points + assists + rebounds + center + forward)
+summary(LinearModelNotGuard)
+
+##By this model, Centers should be the highest paid, but are they?
+##Giannis Antetokoumnpo ($228 Million), but he is a Small Forward. What separates him? He is an Allstar
+```
+
+```{r}
+##Linear Model with an AllStar Forward
+
+LinearModelAllstar <- lm(wage ~ points + assists + rebounds + forward + allstar)
+summary(LinearModelAllstar)
+```
+
+
+```{r}
+wagevar <- ifelse(nbasal1$wage > 1424, 1, 0)
+```
+
+```{r}
+library(readxl)
+myData <- read_excel("~/Desktop/nbasal1.xls")
+```
+
+```{r}
+Logistic_Model <- glm(wagevar ~ points + assists + rebounds + forward + center, family = binomial(link=logit), data = myData)
+summary(Logistic_Model)
+```
+
+```{r}
+Pred <- predict(Logistic_Model, type = "response")
+Binary <- round(Pred)
+100 * mean(nbasal1$wagevar == Binary)
+```
+
+
+```{r}
+myControl <- caret::trainControl(method = "cv", number = 4)
+nbasal1$wagevar <- as.factor(nbasal1$wagevar)
+```
+
+
+```{r}
+Model1 <- caret::train(wagevar ~ points + assists + rebounds + forward + center, data = nbasal1, trControl = myControl, method = "glm", family = binomial(link=logit), metric = "Accuracy")
+Model1
+```
+
+```{r}
+TrainingData <- nbasal1[1:130,]
+ValidationData <- nbasal1[131:269,]
+```
+
+```{r}
+library(caret)
+library(InformationValue)
+library(ISLR)
+```
+
+```{r}
+predicted <- predict(Logistic_Model, TrainingData, type = "response")
+```
+
+```{r}
+TrainingData$wagevar <- ifelse(TrainingData$wagevar=="HighSal", 1,0)
+```
+
+```{r}
+Optimal <- optimalCutoff(TrainingData$wagevar, predicted)[1]
+```
+
+```{r}
+confusionMatrix(TrainingData$wagevar, predicted)
+```
+```{r}
+sensitivity(TrainingData$wagevar, predicted)
+```
+```{r}
+specificity(TrainingData$wagevar, predicted)
+```
+
+
+```{r}
+precision(TrainingData$wagevar, predicted)
+```
+
+
+```{r}
+misClassError(TrainingData$wagevar, predicted, threshold = Optimal)
+```
+
+
+### KNN
+
+```{r}
+library(readxl)
+myData <- read_excel("~/Desktop/nbasal1.xls")
+```
+
+```{r}
+library(caret)
+```
+
+```{r}
+library(gains)
+library(pROC)
+library(dplyr)
+```
+
+```{r}
+
+myData$wage <- ifelse(myData$wage > 1424, 1, 0)
+myData <- dplyr::select(myData, wage, everything())
+head(myData)
+myData1 <- scale(myData[2:22])
+myData1 <- data.frame(myData$wage,myData1)
+colnames(myData1)[1] <- 'wage'
+myData1$wage <- as.factor(myData1$wage)
+head(myData)
+```
+
+```{r}
+set.seed(1)
+myIndex <- createDataPartition(myData1$wage, p=.6, list = FALSE)
+trainSet <- myData1[myIndex,]
+validationSet <- myData1[-myIndex,]
+```
+
+```{r}
+myCtrl <- trainControl(method = "cv", number = 10)
+```
+
+```{r}
+myGrid <- expand.grid(.k=c(1:10))
+```
+
+```{r}
+set.seed(1)
+KNN_Fit <- train(wage ~ ., data = trainSet, method = "knn" , trControl = myCtrl , tuneGrid = myGrid, metric="Accuracy")
+KNN_Fit
+```
+
+```{r}
+KNN_Class <- predict(KNN_Fit, newdata = validationSet)
+confusionMatrix(KNN_Class, validationSet$wage, positive = '1')
+```
+
+
+```{r}
+KNN_Class_prob <- predict(KNN_Fit, newdata = validationSet, type = 'prob')
+KNN_Class_prob
+```
+
+```{r}
+confusionMatrix(as.factor(ifelse(KNN_Class_prob[,2]>.50,'1','0')), validationSet$wage, positive = '1')
+```
+
+```{r}
+validationSet$wage <- as.numeric(as.character(validationSet$wage))
+```
+
+```{r}
+gains_table <- gains(validationSet$wage, KNN_Class_prob[,2])
+gains_table
+```
+
+```{r}
+barplot(gains_table$mean.resp/mean(validationSet$wage), names.arg = gains_table$depth, xlab = "Percentile", ylab = "Lift", ylim = c(0,3), main = "Decile-Wise Lift Chart")
+```
+
+```{r}
+roc_object <- roc(validationSet$wage, KNN_Class_prob[,2])
+plot.roc(roc_object)
+```
+
+```{r}
+auc(roc_object)
+```
+
+
+###Naive Bayes
+
+```{r}
+library(readxl)
+myData <- read_excel("~/Desktop/nbasal1.xls")
+```
+
+```{r}
+library(caret)
+library(klaR)
+library(gains)
+library(pROC)
+library(dplyr)
+```
+
+```{r}
+##New Variable
+wagevar <- ifelse(myData$wage > 1424, 1, 0)
+```
+
+
+```{r}
+myData$wage <- as.factor(wagevar)
+myData <- dplyr::select(myData, wage, everything())
+head(myData)
+myData1 <- scale(myData[2:22])
+myData1 <- data.frame(myData$wage,myData1)
+colnames(myData1)[1] <- 'wage'
+myData1$wage <- as.factor(myData1$wage)
+head(myData)
+```
+
+
+```{r}
+set.seed(1)
+myIndex <- createDataPartition(wagevar, p=.6, list = FALSE)
+trainSet <- myData[myIndex,]
+validationSet <- myData[-myIndex,]
+```
+
+```{r}
+myCtrl <- trainControl(method = 'cv', number = 10)
+set.seed(1)
+nb_fit <- train(wage ~ ., data = trainSet, method = "nb", trControl = myCtrl)
+nb_fit
+```
+
+```{r}
+nb_class <- predict(nb_fit, newdata = validationSet)
+confusionMatrix(nb_class, validationSet$wage, positive = '1')
+```
+
+```{r}
+nb_class_prob <- predict(nb_fit, newdata = validationSet, type = 'prob')
+confusionMatrix(as.factor(ifelse(nb_class_prob[,2]>.75,'1','0')), validationSet$wage, positive = '1')
+```
+
+```{r}
+nb_class_prob <- predict(nb_fit, newdata=validationSet, type = 'prob')
+validationSet$wage <- as.numeric(as.character(validationSet$wage))
+gains_table <- gains(validationSet$wage, nb_class_prob[,2])
+gains_table
+```
+
+```{r}
+barplot(gains_table$mean.resp/mean(validationSet$wage), names.arg = gains_table$wage, xlab="Percentile", ylab = "Lift", ylim = c(0,1.5), main= "Decile-Wise Lift Chart")
+```
+
+```{r}
+roc_object <- roc(validationSet$wage, nb_class_prob[,2])
+plot(roc_object)
+```
+
+```{r}
+auc(roc_object)
+```
+
